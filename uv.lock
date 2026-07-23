@@ -1,0 +1,27 @@
+version = 1
+revision = 3
+requires-python = ">=3.8"
+
+[[package]]
+name = "nerf"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "numpy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "numpy", specifier = "==1.18.5" }]
+
+[[package]]
+name = "numpy"
+version = "1.18.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/1b/d3ddcabd5817be02df0e6ee20d64f77ff6d0d97f83b77f65e98c8a651981/numpy-1.18.5.zip", hash = "sha256:34e96e9dae65c4839bd80012023aadd6ee2ccb73ce7fdf3074c62f301e63120b", size = 5441636, upload-time = "2020-06-04T00:35:35.657Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/77/9492f79d58c9abb8a3a93a40ab661ca7f64169a6010ea1365a51294bd64a/numpy-1.18.5-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:e15b382603c58f24265c9c931c9a45eebf44fe2e6b4eaedbb0d025ab3255228b", size = 15125067, upload-time = "2020-06-04T00:24:17.832Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/32/4382f0ed2723ee04a73e23d6ba9a03c4d09cc1189908756084ccef3305a4/numpy-1.18.5-cp38-cp38-manylinux1_i686.whl", hash = "sha256:3676abe3d621fc467c4c1469ee11e395c82b2d6b5463a9454e37fe9da07cd0d7", size = 17831724, upload-time = "2020-06-04T00:25:20.197Z" },
+    { url = "https://files.pythonhosted.org/packages/01/c6/87592f924246da1e58673cf708a2748754517c5cf050726238d6cfbd8df4/numpy-1.18.5-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:4674f7d27a6c1c52a4d1aa5f0881f1eff840d2206989bae6acb1c7668c02ebfb", size = 20587217, upload-time = "2020-06-04T00:26:32.227Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/52/daf6f4b7fd1499c153cb25ff84f87421598d95e5bb5b760585d2c0263773/numpy-1.18.5-cp38-cp38-win32.whl", hash = "sha256:9c9d6531bc1886454f44aa8f809268bc481295cf9740827254f53c30104f074a", size = 10788402, upload-time = "2020-06-04T00:27:12.427Z" },
+    { url = "https://files.pythonhosted.org/packages/22/cb/21a148329591931d8764e7ef49cb19586dd5b5e002a184988cb5ec1ccba9/numpy-1.18.5-cp38-cp38-win_amd64.whl", hash = "sha256:3dd6823d3e04b5f223e3e265b4a1eae15f104f4366edd409e5a5e413a98f911f", size = 12761126, upload-time = "2020-06-04T00:27:58.462Z" },
+]
