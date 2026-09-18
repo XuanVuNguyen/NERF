@@ -137,7 +137,7 @@ def reaction(args):
     return item
 
 
-def process(name):
+def process(name, out=None):
     tgt = []
     src = []
     with open(name + ".txt") as file:
@@ -159,15 +159,21 @@ def process(name):
                 dataset += [item]        
     pool.shutdown()
 
-    with open(name +"_"+prefix+ '.pickle', 'wb') as file:
+    # Default keeps the legacy <name>_<prefix>.pickle naming; pass `out` to write
+    # straight to the data/<prefix>_<split>.pickle name that main.py:load_data reads.
+    out_path = out if out else name + "_" + prefix + '.pickle'
+    with open(out_path, 'wb') as file:
         pickle.dump(dataset, file)
     print("total %d, legal %d"%(len(src), len(dataset)))
-    print(name, 'file saved.')
+    print(out_path, 'file saved.')
 
 if __name__ =='__main__':
     lg = RDLogger.logger()
     lg.setLevel(RDLogger.CRITICAL)
     RDLogger.DisableLog('rdApp.info') 
-    process("data/valid")
-    process("data/test")
-    process("data/train")
+    # uspto_480k_unified data (converted by scripts/convert_maelle_to_nerf.py into
+    # data/uspto480k_unified/*.txt). Written directly as data/uspto480k_unified_<split>.pickle
+    # so `--prefix uspto480k_unified` loads them with no symlink bridging.
+    process("data/uspto480k_unified/valid", "data/uspto480k_unified_valid.pickle")
+    process("data/uspto480k_unified/test",  "data/uspto480k_unified_test.pickle")
+    process("data/uspto480k_unified/train", "data/uspto480k_unified_train.pickle")

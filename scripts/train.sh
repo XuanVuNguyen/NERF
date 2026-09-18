@@ -4,9 +4,9 @@ set -e
 
 export LD_LIBRARY_PATH=
 # ---- config (edit these) ----
-name=nerf_bs128      # namespaces CKPT/<name>/ and log/<name>/ (fresh name: the old
+name=nerf_bs128_uspto480k_low_lr      # namespaces CKPT/<name>/ and log/<name>/ (fresh name: the old
                      # 'nerf' run diverged/collapsed — keep its checkpoints/logs separate)
-prefix=data          # load_data reads data/<prefix>_<name>.pickle
+prefix=data   # load_data reads data/<prefix>_<split>.pickle (data/uspto480k_unified_train.pickle ...)
 n_gpu=1              # processes; model is always DDP-wrapped even for 1 GPU
 ckpt_dir=/data/vu/retromech/baselines/nerf/runs     # checkpoints go to <ckpt_dir>/<name>/ ; e.g. /data/vu/.../ckpt
 tb_port=6018
@@ -19,14 +19,15 @@ export OMP_NUM_THREADS=8
 # main.py uses os.mkdir (single level), so the <ckpt_dir>/<name>/ parent must exist first.
 mkdir -p "$ckpt_dir" log
 
-# ---- data symlinks ----
-# preprocess.py writes data/<name>_data.pickle, but load_data expects
-# data/<prefix>_<name>.pickle. Bridge the two naming conventions (idempotent).
+# ---- data check ----
+# preprocess.py writes the pickles straight to data/<prefix>_<split>.pickle (see its
+# __main__), which is exactly what load_data reads -- no symlink bridging needed.
+# Fail early with a clear message if preprocessing hasn't been run for this prefix.
 for split in train valid test; do
-  src="data/${split}_data.pickle"
-  dst="data/${prefix}_${split}.pickle"
-  if [ -f "$src" ] && [ ! -e "$dst" ]; then
-    ln -s "${split}_data.pickle" "$dst"
+  pkl="data/${prefix}_${split}.pickle"
+  if [ ! -e "$pkl" ]; then
+    echo "ERROR: $pkl not found. Run preprocess.py first (in the nerf env)." >&2
+    exit 1
   fi
 done
 
@@ -38,6 +39,7 @@ done
 python -m torch.distributed.launch --nproc_per_node=$n_gpu --master_port $port ./main.py \
   --world_size $n_gpu --train \
   --vae \
+  --lr 2e-4 \
   --batch_size 128 --dropout 0.1 --depth 6 --dim 256 \
   --prefix $prefix --name $name --epochs 250 \
   --save_path $ckpt_dir --save
