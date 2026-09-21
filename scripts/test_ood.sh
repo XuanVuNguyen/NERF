@@ -19,7 +19,7 @@ export CUDA_VISIBLE_DEVICES=0
 export OMP_NUM_THREADS=8
 
 # OOD splits to test (scaffold_B intentionally excluded). Each entry is the --prefix,
-# which makes load_data read data/<prefix>_test.pickle.
+# which is the data/ subdir load_data reads data/<prefix>/*test.pickle from.
 prefixes="uspto480k_unified_ood_ester uspto480k_unified_ood_scaffold_A uspto480k_unified_ood_mass"
 
 # results/ symlink -> shared results dir (idempotent)

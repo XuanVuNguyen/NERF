@@ -156,8 +156,12 @@ class MoleculeVAE(nn.Module):
 
     def forward(self, mode, tensors, temperature = 1):
 
+        # --no_reactant_flag drops the product-derived reactant/spectator tag: pass None so
+        # AtomEncoder skips reactant_embedding and treats all atoms equally (leakage-free).
+        # Default (flag absent) preserves the exact legacy behavior.
+        reactant = None if getattr(self.args, 'no_reactant_flag', False) else tensors['reactant']
         src = self.M_encoder(tensors['element'], tensors['src_bond'], tensors['src_aroma'],
-                             tensors['src_charge'], tensors['src_mask'], tensors['src_segment'], tensors['reactant'] )
+                             tensors['src_charge'], tensors['src_mask'], tensors['src_segment'], reactant )
         if mode is 'train':
             bond, aroma, charge = tensors['tgt_bond'], tensors['tgt_aroma'], tensors['tgt_charge']
             if self.args.vae:

@@ -309,7 +309,16 @@ class Trainer(object):
 
 
 def load_data(args, name):
-    file = open('data/' + args.prefix + '_' + name  + '.pickle', 'rb')
+    # --prefix is a directory under data/ (data/ is organized one subdir per dataset).
+    # Pick the single pickle in it whose name ends with the split (train/valid/test),
+    # so filenames inside a dir stay free-form.
+    data_dir = os.path.join('data', args.prefix)
+    matches = [f for f in os.listdir(data_dir) if f.endswith(name + '.pickle')]
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            "expected exactly one *%s.pickle in %s, found %d: %s"
+            % (name + '.pickle', data_dir, len(matches), matches))
+    file = open(os.path.join(data_dir, matches[0]), 'rb')
     full_data = pickle.load(file)
     file.close()
     full_dataset = TransformerDataset(args.shuffle, full_data)

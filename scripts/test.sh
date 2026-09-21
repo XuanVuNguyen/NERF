@@ -5,7 +5,7 @@ set -e
 export LD_LIBRARY_PATH=
 # ---- config (edit these) ----
 name=nerf_bs128_uspto480k_unified   # must match the trained model's --name (loads from <save_path>/<name>/)
-prefix=uspto480k_unified            # load_data reads data/<prefix>_<split>.pickle
+prefix=uspto480k_unified            # data/ subdir; load_data picks data/<prefix>/*<split>.pickle
 save_path=/data/vu/retromech/baselines/nerf/runs   # parent dir of <name>/ (matches train.sh ckpt_dir)
 n_gpu=1
 tb_port=6018
@@ -27,11 +27,9 @@ temperatures="0.0"
 # so we point that at results_dir via a symlink (keeps main.py untouched).
 results_dir=/data/vu/retromech/baselines/nerf/results   # e.g. /data/experiments/nerf_results
 
-# ---- output dir + data symlink ----
+# ---- output dir symlink ----
 mkdir -p "$results_dir"
 if [ "$results_dir" != "results" ] && [ ! -e results ]; then ln -s "$results_dir" results; fi
-src="data/test_data.pickle"; dst="data/${prefix}_test.pickle"
-if [ -f "$src" ] && [ ! -e "$dst" ]; then ln -s "test_data.pickle" "$dst"; fi
 
 # ---- test ----
 python -m torch.distributed.launch --nproc_per_node=$n_gpu --master_port $port ./main.py \

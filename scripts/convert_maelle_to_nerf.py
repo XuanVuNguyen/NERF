@@ -80,13 +80,60 @@ def maps_are_clean(reactant, product):
     return True
 
 
-def convert_split(split_dir, out_path):
+def renumber_keep_all(reactant, product):
+    """Full-mapping variant: strip NOTHING. Assign contiguous map numbers 1..T to *every*
+    reactant atom (reagents/solvents/leaving groups included) and propagate the same numbers
+    to the corresponding product atoms, so NERF's `GetAtomMapNum()-1` indexing stays a clean
+    bijection. Unmapped reactant atoms are exactly the ones absent from the product, so giving
+    them fresh numbers is safe -- they simply get reactant-flag 0 downstream.
+
+    Returns (reactant_smiles, product_smiles, ok). ok is False only for genuinely unfixable
+    rows: parse failure, duplicate reactant maps (ambiguous correspondence), or a product atom
+    whose map has no source atom in the reactant.
+    """
+    r_mol = Chem.MolFromSmiles(reactant)
+    p_mol = Chem.MolFromSmiles(product)
+    if r_mol is None or p_mol is None:
+        return None, None, False
+
+    r_nonzero = [a.GetAtomMapNum() for a in r_mol.GetAtoms() if a.GetAtomMapNum() != 0]
+    if len(r_nonzero) != len(set(r_nonzero)):
+        return None, None, False  # duplicate maps -> ambiguous reactant<->product link
+
+    # fresh contiguous numbering over all reactant atoms; remember old->new for mapped atoms
+    old_to_new = {}
+    for i, a in enumerate(r_mol.GetAtoms()):
+        old = a.GetAtomMapNum()
+        a.SetAtomMapNum(i + 1)
+        if old != 0:
+            old_to_new[old] = i + 1
+
+    # propagate to product; every product atom must trace back to a reactant atom
+    for a in p_mol.GetAtoms():
+        old = a.GetAtomMapNum()
+        if old == 0 or old not in old_to_new:
+            return None, None, False
+        a.SetAtomMapNum(old_to_new[old])
+
+    return Chem.MolToSmiles(r_mol), Chem.MolToSmiles(p_mol), True
+
+
+def convert_split(split_dir, out_path, keep_reagents=False):
     reactants, products = read_arrow(split_dir)
     written = 0
     skipped_parse = 0
     skipped_dirty = 0
     with open(out_path, "w") as out:
         for reactant, product in zip(reactants, products):
+            if keep_reagents:
+                # strip nothing: renumber so every molecule survives
+                r_out, p_out, ok = renumber_keep_all(reactant, product)
+                if not ok:
+                    skipped_dirty += 1
+                    continue
+                out.write("%s>>%s\n" % (r_out, p_out))
+                written += 1
+                continue
             cleaned, ok = strip_unmapped_fragments(reactant)
             if not ok:
                 skipped_parse += 1
@@ -109,6 +156,9 @@ def main():
                         help="where to write the NERF .txt files")
     parser.add_argument("--ood", action="store_true",
                         help="also convert the OOD test splits")
+    parser.add_argument("--keep-reagents", action="store_true",
+                        help="strip nothing: renumber all reactant atoms so reagents/solvents "
+                             "survive (full-mapping benchmark). Use with a distinct --out-dir.")
     args = parser.parse_args()
 
     RDLogger.logger().setLevel(RDLogger.CRITICAL)
@@ -126,7 +176,7 @@ def main():
             continue
         out_path = os.path.join(args.out_dir, out_name + ".txt")
         print("converting %s ->" % split_name)
-        convert_split(split_dir, out_path)
+        convert_split(split_dir, out_path, keep_reagents=args.keep_reagents)
 
 
 if __name__ == "__main__":

@@ -33,11 +33,11 @@ RDLogger.DisableLog('rdApp.*')
 
 NTOKEN = 100  # matches main.py Trainer.ntoken
 
-# split label -> processed test pickle (data/<prefix>_test.pickle style)
+# split label -> processed test pickle (data/ is organized one subdir per dataset)
 DEFAULT_SPLITS = {
-    "iid":       "data/uspto480k_unified_test.pickle",
-    "ood_ester": "data/uspto480k_unified_ood_ester_test.pickle",
-    "ood_mass":  "data/uspto480k_unified_ood_mass_test.pickle",
+    "iid":       "data/uspto480k_unified/uspto480k_unified_test.pickle",
+    "ood_ester": "data/uspto480k_unified_ood_ester/uspto480k_unified_ood_ester_test.pickle",
+    "ood_mass":  "data/uspto480k_unified_ood_mass/uspto480k_unified_ood_mass_test.pickle",
 }
 
 
@@ -46,13 +46,15 @@ def frag_key(smiles_list):
     return tuple(sorted(smiles_list))
 
 
-def eval_split(model, data, temps, pool, batch_size, topks, device, dump_out=None):
+def eval_split(model, data, temps, pool, batch_size, topks, device, dump_out=None,
+               gt_smiles=None):
     ds = TransformerDataset(False, data)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=False,
                         num_workers=0, collate_fn=TransformerDataset.collate_fn)
 
     gt_sets = []           # per reaction: set of ground-truth fragments
     cand_lists = []        # per reaction: ordered list of distinct valid candidate frag-keys
+    offset = 0             # running index into gt_smiles (loader is shuffle=False)
 
     with torch.no_grad():
         model.eval()
@@ -62,10 +64,16 @@ def eval_split(model, data, temps, pool, batch_size, topks, device, dump_out=Non
             element, src_mask = batch['element'], batch['src_mask']
 
             # ground truth (once per batch)
-            gt_args = [(element[i], batch['tgt_mask'][i], batch['tgt_bond'][i],
-                        batch['tgt_aroma'][i], batch['tgt_charge'][i], None) for i in range(b)]
-            gt = list(pool.map(result2mol, gt_args, chunksize=64))
-            batch_gt = [set(item[1].split(".")) for item in gt]
+            if gt_smiles is not None:
+                # Exact-SMILES GT from a sidecar (e.g. datasets with unmapped
+                # products, where target features can't be reconstructed).
+                batch_gt = [set(gt_smiles[offset + i].split(".")) for i in range(b)]
+                offset += b
+            else:
+                gt_args = [(element[i], batch['tgt_mask'][i], batch['tgt_bond'][i],
+                            batch['tgt_aroma'][i], batch['tgt_charge'][i], None) for i in range(b)]
+                gt = list(pool.map(result2mol, gt_args, chunksize=64))
+                batch_gt = [set(item[1].split(".")) for item in gt]
 
             # candidates: greedy first, then ascending temperature
             batch_cands = [[] for _ in range(b)]      # ordered distinct valid frag-keys
@@ -126,6 +134,16 @@ def main():
     ap.add_argument("--checkpoint", required=True, help="full path to a checkpoint file")
     ap.add_argument("--splits", nargs="*", default=list(DEFAULT_SPLITS.keys()),
                     help="subset of: " + ", ".join(DEFAULT_SPLITS))
+    ap.add_argument("--data", default=None,
+                    help="evaluate a single custom feature pickle instead of --splits "
+                         "(e.g. data/absynth_maelle_test.pickle)")
+    ap.add_argument("--gt", default=None,
+                    help="ground-truth sidecar for --data: a pickle of canonical product "
+                         "SMILES aligned with the feature list. Either a plain list, or a "
+                         "dict with a 'product_smiles' key (as convert_absynth_to_nerf.py writes). "
+                         "Required with --data (products can't be reconstructed from features).")
+    ap.add_argument("--split-name", default="custom",
+                    help="label for the --data split in the output table")
     ap.add_argument("--batch_size", type=int, default=256)
     ap.add_argument("--dim", type=int, default=256)
     ap.add_argument("--depth", type=int, default=6)
@@ -153,14 +171,27 @@ def main():
     if args.dump:
         os.makedirs(args.dump, exist_ok=True)
 
+    # A custom --data pickle (with its --gt sidecar) overrides the built-in splits.
+    if args.data:
+        if not args.gt:
+            ap.error("--data requires --gt (products can't be reconstructed from features)")
+        gt = pickle.load(open(args.gt, "rb"))
+        gt_smiles = gt["product_smiles"] if isinstance(gt, dict) else gt
+        splits = {args.split_name: (args.data, gt_smiles)}
+    else:
+        splits = {label: (DEFAULT_SPLITS[label], None) for label in args.splits}
+
     pool = ProcessPoolExecutor(args.workers)
     results = {}
-    for label in args.splits:
-        path = DEFAULT_SPLITS[label]
+    for label, (path, gt_smiles) in splits.items():
         print("\n=== %s (%s) ===" % (label, path))
         data = pickle.load(open(path, "rb"))
+        if gt_smiles is not None and len(gt_smiles) != len(data):
+            raise SystemExit("GT/feature length mismatch for %s: %d vs %d"
+                             % (label, len(gt_smiles), len(data)))
         dump_out = [] if args.dump else None
-        results[label] = eval_split(model, data, temps, pool, args.batch_size, args.topk, device, dump_out)
+        results[label] = eval_split(model, data, temps, pool, args.batch_size, args.topk,
+                                    device, dump_out, gt_smiles=gt_smiles)
         if dump_out is not None:
             out_path = os.path.join(args.dump, "%s_pertemp.pickle" % label)
             pickle.dump({'temps': temps, 'split': label, 'rows': dump_out}, open(out_path, "wb"))
@@ -174,7 +205,7 @@ def main():
     print("\n================ SUMMARY ================")
     hdr = "%-12s %8s %8s" % ("split", "n", "valid") + "".join("%9s" % ("top%d" % k) for k in args.topk)
     print(hdr)
-    for label in args.splits:
+    for label in splits:
         r = results[label]
         row = "%-12s %8d %8.4f" % (label, r["n"], r["valid"]) + "".join("%9.4f" % r["topk"][k] for k in args.topk)
         print(row)

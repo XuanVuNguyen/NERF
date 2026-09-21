@@ -168,12 +168,39 @@ def process(name, out=None):
     print(out_path, 'file saved.')
 
 if __name__ =='__main__':
+    import argparse
     lg = RDLogger.logger()
     lg.setLevel(RDLogger.CRITICAL)
-    RDLogger.DisableLog('rdApp.info') 
-    # uspto_480k_unified data (converted by scripts/convert_maelle_to_nerf.py into
-    # data/uspto480k_unified/*.txt). Written directly as data/uspto480k_unified_<split>.pickle
-    # so `--prefix uspto480k_unified` loads them with no symlink bridging.
-    process("data/uspto480k_unified/valid", "data/uspto480k_unified_valid.pickle")
-    process("data/uspto480k_unified/test",  "data/uspto480k_unified_test.pickle")
-    process("data/uspto480k_unified/train", "data/uspto480k_unified_train.pickle")
+    RDLogger.DisableLog('rdApp.info')
+
+    # Defaults reproduce the legacy behavior: process train/valid/test of the
+    # uspto480k_unified .txt dir (converted by scripts/convert_maelle_to_nerf.py) into
+    # data/uspto480k_unified_<split>.pickle, which `--prefix uspto480k_unified` loads.
+    ap = argparse.ArgumentParser(
+        description="preprocess NERF reactants>>products .txt files into feature pickles")
+    ap.add_argument("--in-dir", default="data/uspto480k_unified",
+                    help="dir holding <split>.txt files")
+    ap.add_argument("--out-prefix", default="data/uspto480k_unified",
+                    help="pickles written as <out-prefix>_<suffix>.pickle; suffix matches "
+                         "main.py:load_data (data/<--prefix>_<name>.pickle)")
+    ap.add_argument("--ood", action="store_true",
+                    help="also process the ester/mass/scaffold OOD test splits")
+    a = ap.parse_args()
+
+    # txt basename (in --in-dir) -> pickle suffix (appended to --out-prefix). The OOD
+    # entries reverse test_ood_<x> -> ood_<x>_test so load_data finds each via
+    # --prefix <out-prefix>_ood_<x> with name 'test' (see scripts/test_ood.sh).
+    jobs = {"train": "train", "valid": "valid", "test": "test"}
+    if a.ood:
+        jobs.update({
+            "test_ood_ester":      "ood_ester_test",
+            "test_ood_mass":       "ood_mass_test",
+            "test_ood_scaffold_A": "ood_scaffold_A_test",
+            "test_ood_scaffold_B": "ood_scaffold_B_test",
+        })
+    for split, suffix in jobs.items():
+        in_base = a.in_dir + "/" + split
+        if not os.path.exists(in_base + ".txt"):
+            print("%s.txt missing -- skipped" % in_base)
+            continue
+        process(in_base, a.out_prefix + "_" + suffix + ".pickle")

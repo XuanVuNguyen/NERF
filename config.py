@@ -34,3 +34,7 @@ parser.add_argument('--beta', type=float, default=0.1, help='the weight of kl')
 parser.add_argument('--checkpoint', type=str, default=None, nargs='*',
                     help='initialize from a checkpoint, if None, do not restore')
 parser.add_argument('--world_size', type=int, default=1, help='number of processes')
+parser.add_argument('--no_reactant_flag', action='store_true', default=False,
+                    help='do not feed the (product-derived) reactant/spectator flag to the '
+                         'encoder; treats all atoms equally. Removes the leakage; requires '
+                         'retraining. See AtomEncoder.reactant_embedding.')
